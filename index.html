@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Task Tracker</title>
+<style>
+:root{--bg:#f3f6f1;--surface:#ffffff;--ink:#17261c;--muted:#5f6f64;--line:#d5ddd3;--accent:#1f7a4d;--accent-ink:#ffffff;--peso:#b4531a;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#101a14;--surface:#18251d;--ink:#e8f1ea;--muted:#9bad9f;--line:#2a3b30;--accent:#3fbf84;--accent-ink:#06150d;--peso:#f09a5e}}
+:root[data-theme="dark"]{--bg:#101a14;--surface:#18251d;--ink:#e8f1ea;--muted:#9bad9f;--line:#2a3b30;--accent:#3fbf84;--accent-ink:#06150d;--peso:#f09a5e}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif}
+main{max-width:520px;margin:0 auto;padding:20px 16px 40px}
+h1{font-size:1.1rem;font-weight:600;margin:0 0 16px;color:var(--muted)}
+.total{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px}
+.peso{font-size:clamp(2.4rem,12vw,3.4rem);font-weight:700;color:var(--peso);line-height:1;font-variant-numeric:tabular-nums}
+.usd{margin-top:8px;font-size:1.2rem;color:var(--muted);font-variant-numeric:tabular-nums}
+#tap{display:block;width:100%;margin:16px 0;padding:34px 0;border:0;border-radius:18px;background:var(--accent);color:var(--accent-ink);font:700 1.6rem inherit;font-family:inherit;cursor:pointer;touch-action:manipulation;transition:transform .08s}
+#tap:active{transform:scale(.97)}
+#tap:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid var(--peso);outline-offset:2px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.stat b{display:block;font-size:1.35rem;font-variant-numeric:tabular-nums}
+.stat span{font-size:.85rem;color:var(--muted)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:18px;font-size:.9rem;color:var(--muted)}
+input{width:90px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit}
+.small{padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit;cursor:pointer}
+.note{margin-top:14px;font-size:.8rem;color:var(--muted);line-height:1.5}
+</style>
+</head>
+<body>
+<main>
+<h1>Task tracker</h1>
+<section class="total">
+  <div class="peso" id="php">₱0.00</div>
+  <div class="usd" id="usd">$0.0000</div>
+</section>
+<button id="tap">Task done</button>
+<section class="stats">
+  <div class="stat"><b id="count">0</b><span>Tasks done</span></div>
+  <div class="stat"><b id="avg">–</b><span>Average time per task</span></div>
+  <div class="stat"><b id="last">–</b><span>Last task took</span></div>
+  <div class="stat"><b id="rate">–</b><span>Tasks per hour</span></div>
+</section>
+<div class="row">
+  <label>Pay per task ($) <input id="pay" type="number" step="0.0001" min="0" value="0.0125"></label>
+  <label>₱ per $1 <input id="fx" type="number" step="0.01" min="0" value="58"></label>
+</div>
+<div class="row">
+  <button class="small" id="undo">Undo last</button>
+  <button class="small" id="reset">Reset all</button>
+  <button class="small" id="float">Float window</button>
+  <button class="small" id="save">Save to .txt</button>
+</div>
+<p class="note">Time per task is measured between one click and the next. Gaps longer than 10 minutes count as breaks and are left out of the average. Update the peso rate yourself, since this page can’t look up live rates.</p>
+</main>
+<script>
+var KEY="task-tracker-v1",BREAK=10*60*1000;
+var s={clicks:[],pay:0.0125,fx:58};
+try{var raw=localStorage.getItem(KEY);if(raw){var p=JSON.parse(raw);if(p&&Array.isArray(p.clicks))s=p;}}catch(e){}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(s));}catch(e){}}
+var cache={};var $=function(i){return cache[i]||(cache[i]=document.getElementById(i))};
+function fmt(ms){if(ms==null||isNaN(ms))return"–";var t=ms/1000;if(t<60)return t.toFixed(1)+" s";var m=Math.floor(t/60);return m+"m "+Math.round(t-m*60)+"s";}
+function intervals(){var r=[];for(var i=1;i<s.clicks.length;i++){var d=s.clicks[i]-s.clicks[i-1];if(d<=BREAK)r.push(d);}return r;}
+function render(){
+  var n=s.clicks.length,usd=n*s.pay,php=usd*s.fx;
+  $("php").textContent="₱"+php.toLocaleString("en-PH",{minimumFractionDigits:2,maximumFractionDigits:2});
+  $("usd").textContent="$"+usd.toFixed(4);
+  $("count").textContent=n;
+  var iv=intervals(),avg=iv.length?iv.reduce(function(a,b){return a+b},0)/iv.length:null;
+  $("avg").textContent=fmt(avg);
+  $("last").textContent=iv.length&&n>1&&(s.clicks[n-1]-s.clicks[n-2])<=BREAK?fmt(s.clicks[n-1]-s.clicks[n-2]):"–";
+  $("rate").textContent=avg?(3600000/avg).toFixed(0):"–";
+  $("pay").value=s.pay;$("fx").value=s.fx;
+}
+$("tap").onclick=function(){s.clicks.push(Date.now());save();render();};
+$("undo").onclick=function(){s.clicks.pop();save();render();};
+$("reset").onclick=function(){if(s.clicks.length&&!confirm("Clear all tasks and earnings?"))return;s.clicks=[];save();render();};
+$("pay").oninput=function(){var v=parseFloat(this.value);if(v>=0){s.pay=v;save();render2();}};
+$("fx").oninput=function(){var v=parseFloat(this.value);if(v>=0){s.fx=v;save();render2();}};
+$("float").onclick=async function(){
+  if(!("documentPictureInPicture" in window)){alert("Floating windows need Chrome or Edge on a laptop or desktop.");return;}
+  try{
+    var pip=await documentPictureInPicture.requestWindow({width:380,height:600});
+    pip.document.head.appendChild(document.querySelector("style").cloneNode(true));
+    var meta=pip.document.createElement("meta");meta.name="viewport";meta.content="width=device-width, initial-scale=1";pip.document.head.appendChild(meta);
+    var main=document.querySelector("main");
+    pip.document.body.appendChild(main);
+    pip.addEventListener("pagehide",function(){document.body.insertBefore(main,document.querySelector("script"));});
+  }catch(e){alert("Couldn’t open a floating window here. Try opening the page link directly in Chrome or Edge.");}
+};
+function render2(){var a=$("pay").value,b=$("fx").value;render();$("pay").value=a;$("fx").value=b;}
+
+function pad(x){return(x<10?"0":"")+x}
+function buildTxt(){
+  var n=s.clicks.length,usd=n*s.pay,php=usd*s.fx,iv=intervals();
+  var avg=iv.length?iv.reduce(function(a,b){return a+b},0)/iv.length:null;
+  var L=["TASK TRACKER RECORD","Saved: "+new Date().toLocaleString("en-PH"),"",
+    "Tasks done: "+n,"Pay per task: $"+s.pay,"Peso rate: PHP "+s.fx+" per $1",
+    "Total earned: $"+usd.toFixed(4)+" = PHP "+php.toFixed(2),
+    "Average time per task: "+fmt(avg),"Tasks per hour: "+(avg?(3600000/avg).toFixed(0):"-"),"",
+    "LOG (date and time, time since previous task, running total in PHP)"];
+  for(var i=0;i<n;i++){
+    var d=i?s.clicks[i]-s.clicks[i-1]:null;
+    L.push((i+1)+". "+new Date(s.clicks[i]).toLocaleString("en-PH")+" | "+(d==null?"first task":fmt(d)+(d>BREAK?" (break)":""))+" | PHP "+((i+1)*s.pay*s.fx).toFixed(2));
+  }
+  return L.join("\r\n");
+}
+$("save").onclick=async function(){
+  var dl=null;
+  try{dl=window.claude?await claude.use("downloads"):null;}catch(e){}
+  if(!dl){alert("Saving files isn\u2019t available in this view. Try opening the page link directly.");return;}
+  var d=new Date(),name="task-tracker-"+d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())+".txt";
+  try{await dl.save({filename:name,data:buildTxt()});}
+  catch(e){if(!e||e.code!=="declined")alert("Couldn\u2019t save the file.");}
+};
+render();
+</script>
+</body>
+</html>
